@@ -3,7 +3,7 @@ use crate::cid::Cid;
 use crate::codec::{Codec, Decode, Encode, References};
 use crate::error::{BlockTooLarge, InvalidMultihash, Result, UnsupportedMultihash};
 use crate::ipld::Ipld;
-use crate::multihash::MultihashDigest;
+use crate::multihash::{MultihashDigest, Code};
 use crate::store::StoreParams;
 use core::borrow::Borrow;
 use core::convert::TryFrom;
@@ -113,6 +113,32 @@ impl<S: StoreParams> Block<S> {
         (self.cid, self.data)
     }
 
+    /// Encode a block.`
+    pub fn encode_sha_256<CE: Codec, T: Encode<CE> + ?Sized>(
+        codec: CE,
+        //   hcode: S::Hashes,
+        payload: &T,
+    ) -> Result<Self>
+    where
+        CE: Into<S::Codecs>,
+    {
+        debug_assert_eq!(
+            Into::<u64>::into(codec),
+            Into::<u64>::into(Into::<S::Codecs>::into(codec))
+        );
+        let data = codec.encode(payload)?;
+        if data.len() > S::MAX_BLOCK_SIZE {
+            return Err(BlockTooLarge(data.len()).into());
+        }
+        let mh = Code::Sha2_256;
+        let cid = Cid::new_v1(codec.into(), mh.digest(&data));
+        Ok(Self {
+            _marker: PhantomData,
+            cid,
+            data,
+        })
+    }
+    
     /// Encode a block.`
     pub fn encode<CE: Codec, T: Encode<CE> + ?Sized>(
         codec: CE,
